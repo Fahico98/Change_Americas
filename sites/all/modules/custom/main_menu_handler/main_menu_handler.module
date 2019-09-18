@@ -1,0 +1,257 @@
+
+<?php
+
+   /**
+    * Implements hook_permission().
+    */
+   function main_menu_handler_permission(){
+
+      $permissions = array();
+
+      $permissions['my account access'] = array(
+         'title' => t("Access to My Account Link"),
+         'description' => t("Access to my account link.")
+      );
+
+      $permissions['report form access'] = array(
+         'title' => t("Access to Report Form Link"),
+         'description' => t("Access to report form link.")
+      );
+
+      return($permissions);
+   }
+
+   /**
+    * Implements hook_menu().
+    */
+   function main_menu_handler_menu(){
+
+      $items = array();
+
+      $items['report_form'] = array(
+         'title' => 'Informe',
+         'description' => 'Solicitud de Informe de Inteligencia Competitiva.',
+         'type' => MENU_NORMAL_ITEM,
+         'page callback' => 'drupal_get_form',
+         'page arguments' => array('main_menu_handler_form'),
+         'access arguments' => array('report form access')
+      );
+
+      $items['my_account'] = array(
+         'title' => 'Mi Cuenta',
+         'type' => MENU_NORMAL_ITEM,
+         'page callback' => 'main_menu_handler_redirect',
+         'access arguments' => array('my account access')
+      );
+
+      return($items);
+   }
+
+   /**
+    * Using drupal_goto() function to redirect user to "/user" path.
+    */
+   function main_menu_handler_redirect(){
+      drupal_goto('user');
+   }
+
+   /**
+    * Implements hook_form().
+    */
+   function main_menu_handler_form($form, &$form_state) {
+
+      try{
+         $query = db_select('country', 'c')->fields('c', array('country'));
+         $valuesArray = $query->execute()->fetchCol(0);
+         $countryOptions = array();
+         for($i = 0; $i < count($valuesArray); $i++){
+            $countryOptions[t($valuesArray[$i])] = t($valuesArray[$i]);
+         }
+      }catch(Exception $e){
+         echo($e->getMessage());
+      }
+
+      $form = array();
+      $form['#prefix'] = '<div id="form-wrapper" class="form-select">';
+      $form['#suffix'] = '</div>';
+
+      $form['field_empresa'] = array(
+         '#type' => 'textfield',
+         '#title' => 'Empresa',
+         //'#description' => 'Ingrese el nombre de la empresa.',
+         '#placeholder' => t('Nombre de la empresa'),
+         '#required' => TRUE
+      );
+
+      $form['dropdown_actividadEconomica'] = array(
+         '#title' => t('Actividad Económica'),
+         '#type' => 'select',
+         //'#description' => 'Seleccione la actividad econónica de la empresa.',
+         '#options' => array(
+            t('one'),
+            t('two'),
+            t('three')
+         ),
+         '#required' => TRUE
+      );
+
+      $form['dropdown_sectorProductivo'] = array(
+         '#title' => t('Sector Productivo'),
+         '#type' => 'select',
+         //'#description' => 'Seleccione el sector productivo donde se desempeña la empresa.',
+         '#options' => array(
+            t('one'),
+            t('two'),
+            t('three')
+         ),
+         '#required' => TRUE
+      );
+
+      $form['dropdown_tecnologiaPrincipal'] = array(
+         '#title' => t('Tecnologia Principal'),
+         '#type' => 'select',
+         //'#description' => 'Seleccione la principal tecnología empleada por la ' .
+            //'empresa para la prestación de su servicio o fabricación de su producto.',
+         '#options' => array(
+            t('one'),
+            t('two'),
+            t('three')
+         ),
+         '#required' => TRUE
+      );
+
+      $form['dropdown_serviciosYProductos'] = array(
+         '#title' => t('Servicios y Productos Principales'),
+         '#type' => 'select',
+         //'#description' => 'Seleccione el principal producto o servicio que comercializa la empresa.',
+         '#options' => array(
+            t('one'),
+            t('two'),
+            t('three')
+         ),
+         '#required' => TRUE
+      );
+
+      $form['dropdown_paisEmpresa'] = array(
+         '#title' => t('País'),
+         '#type' => 'select',
+         '#options' => $countryOptions,
+         '#required' => True,
+         '#ajax' => array(
+            'event' => 'change',
+            'callback' => 'main_menu_handler_populate_state_dropdown',
+            'wrapper' => 'form-wrapper',
+            'method' => 'replace'
+         )
+      );
+
+      $form['dropdown_estadoEmpresa'] = array(
+         '#title' => t('Estado/Provincia'),
+         '#type' => 'select',
+         '#required' => False,
+         '#options' => array('0' => t('- Select -')),
+         '#disabled' => True
+      );
+
+      $form['dropdown_ciudadEmpresa'] = array(
+         '#title' => t('Ciudad'),
+         '#type' => 'select',
+         '#required' => False,
+         '#options' => array('0' => t('- Select -')),
+         '#disabled' => True
+      );
+
+      $form['submit_button'] = array(
+         '#type' => 'submit',
+         '#value' => t('Solicitar')
+      );
+
+      return($form);
+   }
+
+   function main_menu_handler_form_validate($form, &$form_state){
+
+   }
+
+   function main_menu_handler_form_submit($form, &$form_state){
+
+   }
+
+   function main_menu_handler_populate_state_dropdown($form, &$form_state){
+
+      //$selectedCountry = $form_state['values']['dropdown_paisEmpresa'];
+
+      if(isset($form_state['values']['dropdown_paisEmpresa'])){
+         $selectedCountry = $form_state['values']['dropdown_paisEmpresa'];
+         try{
+            $query = db_select('country', 'c')->fields('c', array('countryid'))->condition('c.country', $selectedCountry, '=');
+            $countryId = $query->execute()->fetchCol(0);
+            $query = db_select('state', 's')->fields('s', array('statename'))->condition('s.countryid', $countryId, '=');
+            $valuesArray = $query->execute()->fetchCol(0);
+            $stateOptions[''] = "- Select -";
+            for($i = 0; $i < count($valuesArray); $i++){
+               $stateOptions[t($valuesArray[$i])] = t($valuesArray[$i]);
+            }
+         }catch(Exception $e){
+            echo($e->getMessage());
+         }
+         $form['dropdown_estadoEmpresa'] = array(
+            '#title' => t('Estado/Provincia'),
+            '#type' => 'select',
+            '#required' => True,
+            '#options' => $stateOptions,
+            '#ajax' => array(
+               'event' => 'change',
+               'callback' => 'main_menu_handler_populate_city_dropdown',
+               'wrapper' => 'form-wrapper',
+               'method' => 'replace'
+            )
+         );
+      }else{
+         $form['dropdown_estadoEmpresa'] = array(
+            '#title' => t('Estado/Provincia'),
+            '#type' => 'select',
+            '#required' => False,
+            '#options' => array('0' => t('- Select -')),
+            '#disabled' => True
+         );
+      }
+
+      return($form);
+   }
+
+   function main_menu_handler_populate_city_dropdown($form, &$form_state){
+
+      $selectedState = $form_state['values']['dropdown_estadoEmpresa'];
+
+      if($selectedState != ''){
+         try{
+            $query = db_select('state', 's')->fields('s', array('id'))->condition('s.statename', $selectedState, '=');
+            $stateId = $query->execute()->fetchCol(0);
+            $query = db_select('city', 'c')->fields('c', array('city'))->condition('c.stateid', $stateId, '=');
+            $valuesArray = $query->execute()->fetchCol(0);
+            $cityOptions[""] = "- Select -";
+            for($i = 0; $i < count($valuesArray); $i++){
+               $cityOptions[t($valuesArray[$i])] = t($valuesArray[$i]);
+               dpm($valuesArray[$i] . "\n");
+            }
+         }catch(Exception $e){
+            echo($e->getMessage());
+         }
+         $form['dropdown_ciudadEmpresa'] = array(
+            '#title' => t('Ciudad'),
+            '#type' => 'select',
+            '#required' => True,
+            '#options' => $cityOptions
+         );
+      }else{
+         $form['dropdown_ciudadEmpresa'] = array(
+            '#title' => t('Ciudad'),
+            '#type' => 'select',
+            '#required' => False,
+            '#options' => array('0' => t('- Select -')),
+            '#disabled' => True
+         );
+      }
+
+      return($form);
+   }

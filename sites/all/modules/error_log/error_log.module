@@ -1,0 +1,78 @@
+<?php
+
+/**
+ * @file
+ * Sends watchdog log entries to the PHP error log.
+ *
+ * @Author: mark burdett https://www.drupal.org/u/mfb
+ */
+
+/**
+ * Implements hook_form_system_logging_settings_alter().
+ */
+function error_log_form_system_logging_settings_alter(array &$form, array &$form_state) {
+  module_load_include('admin.inc', 'error_log');
+  error_log_settings_form($form, $form_state);
+}
+
+/**
+ * Implements hook_help().
+ */
+function error_log_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#error_log':
+      return t('Sends watchdog log entries to the PHP error log.');
+  }
+}
+
+/**
+ * Implements hook_watchdog().
+ */
+function error_log_watchdog(array $log) {
+  $levels = variable_get('error_log_levels', error_log_default_levels());
+  if (empty($levels["level_{$log['severity']}"])) {
+    return;
+  }
+  // Drush handles error logging for us, so disable redundant logging.
+  if (function_exists('drush_main') && !ini_get('error_log')) {
+    return;
+  }
+  $ignored_types = array_map('trim', preg_split('/\R/', variable_get('error_log_ignored_types', ''), -1, PREG_SPLIT_NO_EMPTY));
+  if (in_array($log['type'], $ignored_types)) {
+    return;
+  }
+  if (!is_array($log['variables'])) {
+    $log['variables'] = array();
+  }
+  $severity_list = error_log_severity_levels();
+  $message = "[{$severity_list[$log['severity']]}] [{$log['type']}] [{$log['ip']}] [uid:{$log['uid']}] [{$log['request_uri']}] [{$log['referer']}] ";
+  // Cleanup excessive whitespace and HTML-encoded quotes.
+  $message .= str_replace(array('    ', "\n"), '', html_entity_decode(strip_tags(strtr($log['message'], $log['variables'])), ENT_QUOTES, 'UTF-8'));
+  return error_log($message);
+}
+
+/**
+ * Provides untranslated watchdog severity levels.
+ */
+function error_log_severity_levels() {
+  return array(
+    WATCHDOG_EMERGENCY => 'emergency',
+    WATCHDOG_ALERT => 'alert',
+    WATCHDOG_CRITICAL => 'critical',
+    WATCHDOG_ERROR => 'error',
+    WATCHDOG_WARNING => 'warning',
+    WATCHDOG_NOTICE => 'notice',
+    WATCHDOG_INFO => 'info',
+    WATCHDOG_DEBUG => 'debug',
+  );
+}
+
+/**
+ * Provides default log level configuration.
+ */
+function error_log_default_levels() {
+  foreach (error_log_severity_levels() as $key => $value) {
+    $levels["level_$key"] = "level_$key";
+  }
+  return $levels;
+}

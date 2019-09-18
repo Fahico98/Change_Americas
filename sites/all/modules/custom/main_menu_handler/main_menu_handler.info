@@ -1,0 +1,4 @@
+name = Main Menu Handler
+description = No description here...
+package = custom modules
+core = 7.x

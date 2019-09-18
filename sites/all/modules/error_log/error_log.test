@@ -1,0 +1,52 @@
+<?php
+
+/**
+ * @file
+ * Tests for Error Log module.
+ */
+
+/**
+ * Tests Error Log module functionality.
+ */
+class ErrorLogTestCase extends DrupalWebTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Error Log functionality',
+      'description' => 'Test Error Log module.',
+      'group' => 'error_log',
+    );
+  }
+
+  /**
+   * Tests Error Log module.
+   */
+  public function testErrorLog() {
+    $original_error_log = ini_get('error_log');
+    $error_log = $this->public_files_directory . '/error_log.log';
+    ini_set('error_log', $error_log);
+    module_enable(array('error_log'));
+    try {
+      db_query('SELECT * FROM {nonexistent_table}', array(':uid' => 0));
+    }
+    catch (PDOException $exception) {
+      watchdog_exception('test', $exception);
+    }
+    $log = file($error_log);
+    $this->assertIdentical(count($log), 3, 'Log has three messages.');
+    $this->assertIdentical(preg_match('/^\[.*\] \[info\] \[system\] .* error_log module installed\.$/', $log[0]), 1, 'First log message checks out.');
+    $this->assertIdentical(preg_match('/^\[.*\] \[info\] \[system\] .* error_log module enabled\.$/', $log[1]), 1, 'Second log message checks out.');
+    $pattern = preg_quote("nonexistent_table' doesn't exist: SELECT * FROM {nonexistent_table}; Array([:uid] => 0) in ErrorLogTestCase");
+    $this->assertIdentical(preg_match("/^\[.*\] \[error\] \[test\] .*$pattern/", $log[2]), 1, 'Third log message checks out.');
+    ini_set('error_log', $original_error_log);
+  }
+
+}

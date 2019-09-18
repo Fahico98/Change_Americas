@@ -1,0 +1,90 @@
+<?php
+
+/**
+ * @file
+ * Allows users to login exclusively with their email address in the input box.
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Alters the main user login form.
+ */
+function login_onlyemail_form_user_login_alter(&$form, &$form_state, $form_id) {
+  $form['name']['#title'] = t('Email address');
+  $form['name']['#description'] = t('Enter your email address.');
+  $form['name']['#element_validate'][] = 'login_onlyemail_user_login_validate';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Alters the user login block form.
+ */
+function login_onlyemail_form_user_login_block_alter(&$form, &$form_state, $form_id) {
+  $form['name']['#title'] = t('Email address');
+  $form['name']['#element_validate'][] = 'login_onlyemail_user_login_validate';
+}
+
+/**
+ * Form element validation handler for the user login form.
+ *
+ * Allows users to authenticate by email.
+ */
+function login_onlyemail_user_login_validate($form, &$form_state) {
+  $name_input = $form_state['values']['name'];
+
+  // Try loading by email.
+  if ($user = user_load_by_mail($name_input)) {
+    // Set the username for further validation.
+    $form_state['values']['name'] = $user->name;
+    return TRUE;
+  }
+
+  // Block loading by username.
+  if ($user = user_load_by_name($name_input)) {
+    form_set_error('name][' . $name_input, t('Please use only your registered email address when signing up.'));
+    $form_state['rebuild'] = TRUE;
+    return FALSE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_help().
+ */
+function login_onlyemail_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#login_onlyemail':
+
+      $filepath = dirname(__FILE__) . '/README.md';
+      if (file_exists($filepath)) {
+        $readme = file_get_contents($filepath);
+      }
+      else {
+        $filepath = dirname(__FILE__) . '/README.txt';
+        if (file_exists($filepath)) {
+          $readme = file_get_contents($filepath);
+        }
+      }
+      if (!isset($readme)) {
+        return NULL;
+      }
+      if (module_exists('markdown')) {
+        $filters = module_invoke('markdown', 'filter_info');
+        $info = $filters['filter_markdown'];
+    
+        if (function_exists($info['process callback'])) {
+          $output = $info['process callback']($readme, NULL);
+        }
+        else {
+          $output = '<pre>' . $readme . '</pre>';
+        }
+      }
+      else {
+        $output = '<pre>' . $readme . '</pre>';
+      }
+
+      return $output;
+  }
+}
