@@ -1,6 +1,8 @@
 
 <?php
 
+   include("docx_generator.php");
+
    /**
     * Implements hook_permission().
     */
@@ -59,27 +61,14 @@
     */
    function main_menu_handler_form($form, &$form_state) {
 
-      try{
-         $query = db_select('country', 'c')->fields('c', array('country'));
-         $valuesArray = $query->execute()->fetchCol(0);
-         $countryOptions = array();
-         for($i = 0; $i < count($valuesArray); $i++){
-            $countryOptions[t($valuesArray[$i])] = t($valuesArray[$i]);
-         }
-      }catch(Exception $e){
-         echo($e->getMessage());
-      }
-
       $form = array();
-      $form['#prefix'] = '<div id="form-wrapper" class="form-select">';
-      $form['#suffix'] = '</div>';
 
       $form['field_empresa'] = array(
          '#type' => 'textfield',
          '#title' => 'Empresa',
          //'#description' => 'Ingrese el nombre de la empresa.',
          '#placeholder' => t('Nombre de la empresa'),
-         '#required' => TRUE
+         '#required' => FALSE
       );
 
       $form['dropdown_actividadEconomica'] = array(
@@ -91,7 +80,7 @@
             t('two'),
             t('three')
          ),
-         '#required' => TRUE
+         '#required' => FALSE
       );
 
       $form['dropdown_sectorProductivo'] = array(
@@ -103,7 +92,7 @@
             t('two'),
             t('three')
          ),
-         '#required' => TRUE
+         '#required' => FALSE
       );
 
       $form['dropdown_tecnologiaPrincipal'] = array(
@@ -116,7 +105,7 @@
             t('two'),
             t('three')
          ),
-         '#required' => TRUE
+         '#required' => FALSE
       );
 
       $form['dropdown_serviciosYProductos'] = array(
@@ -128,36 +117,68 @@
             t('two'),
             t('three')
          ),
-         '#required' => TRUE
+         '#required' => FALSE
       );
+
+      $countryOptions = main_menu_handler_get_country_options();
+      if(isset($form_state['values']['dropdown_paisEmpresa'])){
+         $countrySelected =  $form_state['values']['dropdown_paisEmpresa'];
+      }else{
+         $countrySelected = key($countryOptions);
+      }
 
       $form['dropdown_paisEmpresa'] = array(
          '#title' => t('País'),
          '#type' => 'select',
          '#options' => $countryOptions,
-         '#required' => True,
+         '#default_value' => $countrySelected,
+         '#required' => FALSE,
          '#ajax' => array(
             'event' => 'change',
-            'callback' => 'main_menu_handler_populate_state_dropdown',
-            'wrapper' => 'form-wrapper',
+            'callback' => 'main_menu_handler_country_dropdown_callback',
+            'wrapper' => 'state-dropdown-replace',
             'method' => 'replace'
          )
       );
 
+      $stateOptions = main_menu_handler_get_state_options($countrySelected);
+      if(isset($form_state['values']['dropdown_estadoEmpresa'])){
+         $stateSelected =  $form_state['values']['dropdown_estadoEmpresa'];
+      }else{
+         $stateSelected = key($stateOptions);
+      }
+
       $form['dropdown_estadoEmpresa'] = array(
          '#title' => t('Estado/Provincia'),
          '#type' => 'select',
-         '#required' => False,
-         '#options' => array('0' => t('- Select -')),
-         '#disabled' => True
+         '#options' => $stateOptions,
+         '#default_value' => $stateSelected,
+         '#required' => FALSE,
+         '#prefix' => '<div id="state-dropdown-replace" class="form-item form-type-select form-group">',
+         '#suffix' => '</div>',
+         '#ajax' => array(
+            'event' => 'change',
+            'callback' => 'main_menu_handler_state_dropdown_callback',
+            'wrapper' => 'city-dropdown-replace',
+            'method' => 'replace'
+         )
       );
+
+      $cityOptions = main_menu_handler_get_city_options($stateSelected);
+      if(isset($form_state['values']['dropdown_cityEmpresa'])){
+         $citySelected =  $form_state['values']['dropdown_cityEmpresa'];
+      }else{
+         $citySelected = key($cityOptions);
+      }
 
       $form['dropdown_ciudadEmpresa'] = array(
          '#title' => t('Ciudad'),
          '#type' => 'select',
-         '#required' => False,
-         '#options' => array('0' => t('- Select -')),
-         '#disabled' => True
+         '#required' => FALSE,
+         '#prefix' => '<div id="city-dropdown-replace" class="form-item form-type-select form-group">',
+         '#suffix' => '</div>',
+         '#options' => $cityOptions,
+         '#default_value' => $citySelected
       );
 
       $form['submit_button'] = array(
@@ -176,82 +197,61 @@
 
    }
 
-   function main_menu_handler_populate_state_dropdown($form, &$form_state){
-
-      //$selectedCountry = $form_state['values']['dropdown_paisEmpresa'];
-
-      if(isset($form_state['values']['dropdown_paisEmpresa'])){
-         $selectedCountry = $form_state['values']['dropdown_paisEmpresa'];
-         try{
-            $query = db_select('country', 'c')->fields('c', array('countryid'))->condition('c.country', $selectedCountry, '=');
-            $countryId = $query->execute()->fetchCol(0);
-            $query = db_select('state', 's')->fields('s', array('statename'))->condition('s.countryid', $countryId, '=');
-            $valuesArray = $query->execute()->fetchCol(0);
-            $stateOptions[''] = "- Select -";
-            for($i = 0; $i < count($valuesArray); $i++){
-               $stateOptions[t($valuesArray[$i])] = t($valuesArray[$i]);
-            }
-         }catch(Exception $e){
-            echo($e->getMessage());
-         }
-         $form['dropdown_estadoEmpresa'] = array(
-            '#title' => t('Estado/Provincia'),
-            '#type' => 'select',
-            '#required' => True,
-            '#options' => $stateOptions,
-            '#ajax' => array(
-               'event' => 'change',
-               'callback' => 'main_menu_handler_populate_city_dropdown',
-               'wrapper' => 'form-wrapper',
-               'method' => 'replace'
-            )
-         );
-      }else{
-         $form['dropdown_estadoEmpresa'] = array(
-            '#title' => t('Estado/Provincia'),
-            '#type' => 'select',
-            '#required' => False,
-            '#options' => array('0' => t('- Select -')),
-            '#disabled' => True
-         );
-      }
-
-      return($form);
+   function main_menu_handler_country_dropdown_callback($form, &$form_state) {
+      return $form['dropdown_estadoEmpresa'];
    }
 
-   function main_menu_handler_populate_city_dropdown($form, &$form_state){
-
-      $selectedState = $form_state['values']['dropdown_estadoEmpresa'];
-
-      if($selectedState != ''){
-         try{
-            $query = db_select('state', 's')->fields('s', array('id'))->condition('s.statename', $selectedState, '=');
-            $stateId = $query->execute()->fetchCol(0);
-            $query = db_select('city', 'c')->fields('c', array('city'))->condition('c.stateid', $stateId, '=');
-            $valuesArray = $query->execute()->fetchCol(0);
-            $cityOptions[""] = "- Select -";
-            for($i = 0; $i < count($valuesArray); $i++){
-               $cityOptions[t($valuesArray[$i])] = t($valuesArray[$i]);
-               dpm($valuesArray[$i] . "\n");
-            }
-         }catch(Exception $e){
-            echo($e->getMessage());
-         }
-         $form['dropdown_ciudadEmpresa'] = array(
-            '#title' => t('Ciudad'),
-            '#type' => 'select',
-            '#required' => True,
-            '#options' => $cityOptions
-         );
-      }else{
-         $form['dropdown_ciudadEmpresa'] = array(
-            '#title' => t('Ciudad'),
-            '#type' => 'select',
-            '#required' => False,
-            '#options' => array('0' => t('- Select -')),
-            '#disabled' => True
-         );
-      }
-
-      return($form);
+   function main_menu_handler_state_dropdown_callback($form, &$form_state) {
+      return $form['dropdown_ciudadEmpresa'];
    }
+
+   function main_menu_handler_get_country_options(){
+      try{
+         $countryQueryResult = db_query("SELECT countryid, country FROM c_a_drupal_country ORDER BY country ASC");
+         $countryArray = array();
+         $countryArray[0] = '-- Seleccionar País --';
+         foreach($countryQueryResult as $row){
+            $countryArray[$row->countryid] = $row->country;
+         }
+      }catch(Exception $e){
+         echo($e->getMessage());
+      }
+      return $countryArray;
+   }
+
+   function main_menu_handler_get_state_options($key = ''){
+      try{
+         $countryId = $key;
+         $stateQueryResult = db_query(
+            "SELECT id, statename FROM c_a_drupal_state WHERE countryid = :countryid",
+            array(':countryid' => $countryId)
+         );
+         $stateArray = array();
+         $stateArray[0] = '-- Seleccionar Estado o Provincia --';
+         foreach($stateQueryResult as $row){
+            $stateArray[$row->id] = $row->statename;
+         }
+      }catch(Exception $e){
+         echo($e->getMessage());
+      }
+      return($stateArray);
+   }
+
+   function main_menu_handler_get_city_options($key = ''){
+      try{
+         $stateId = $key;
+         $cityQueryResult = db_query(
+            "SELECT id, city FROM c_a_drupal_city WHERE stateid = :stateid",
+            array(':stateid' => $stateId)
+         );
+         $cityArray = array();
+         $cityArray[0] = '-- Seleccionar Ciudad --';
+         foreach($cityQueryResult as $row){
+            $cityArray[$row->id] = $row->city;
+         }
+      }catch(Exception $e){
+         echo($e->getMessage());
+      }
+      return($cityArray);
+   }
+

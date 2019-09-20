@@ -9,7 +9,7 @@
 
 function mymodule_country_state_city($form, &$form_state, $no_js_use = FALSE) {
 
- $options_first = _profile_myprofile_get_first_dropdown_options();
+   $options_first = _profile_myprofile_get_first_dropdown_options();
    if(isset($form_state['values']['state_of_residence'])){
        $selected = isset($form_state['values']['country_of_residence']) ? $form_state['values']['country_of_residence'] : key($options_first);
    }
@@ -105,6 +105,8 @@ function ajax_example_dependent_dropdown1_callback($form, $form_state) {
  *
  * @return array of options
  */
+
+
 function _profile_myprofile_get_first_dropdown_options() {
 
     $country_query_result1 = db_query("SELECT country_id,country_name FROM country ORDER BY country_name ASC");

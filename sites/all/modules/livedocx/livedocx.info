@@ -1,0 +1,16 @@
+name = "LiveDocx"
+description = "Integrates www.livedocx.com services to generate dynamic word docx and pdf files from Microsoft docx mail merge templates."
+core = "7.x"
+package = "Services"
+configure = admin/config/services/livedocx
+dependencies[] = views (3.x)
+dependencies[] = field
+dependencies[] = field_ui
+dependencies[] = variable
+
+; Information added by Drupal.org packaging script on 2014-11-17
+version = "7.x-1.0"
+core = "7.x"
+project = "livedocx"
+datestamp = "1416241269"
+

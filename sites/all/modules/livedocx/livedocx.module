@@ -1,0 +1,369 @@
+<?php
+//Todo:  This file should only contain core api hook implentations and livedocx api functions
+function livedocx_menu(){
+  //Todo: seperate out admin menu callbacks and functions into a livedocx.admin.inc file
+  return array(
+    'admin/config/services/livedocx' => array(
+      'title' => 'LiveDocx',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('livedocx_admin_template_form'),
+      'type' => MENU_NORMAL_ITEM,
+      'access arguments' => array('administer livedocx'),
+      'file' => 'livedocx.admin.inc',
+    ),
+    'admin/config/services/livedocx/add' => array(
+      'title' => 'Add Templates',
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+      'file' => 'livedocx.admin.inc',
+    ),
+    'admin/config/services/livedocx/templates' => array(
+      'title'           => 'Administer Templates',
+      'page callback'   => 'drupal_get_form',
+      'page arguments'  => array('livedocx_admin_manage_templates_form'),
+      'type' => MENU_LOCAL_TASK,
+      'access arguments' => array('administer livedocx'),
+      'file' => 'livedocx.admin.inc',
+    ),
+    'admin/config/services/livedocx/templates/%livedocx_wordtemplate/edit' => array(
+      'title'           => 'Edit Template',
+      'title callback'  => 'livedocx_template_title',
+      'title agruments' => array(5),
+      'page callback'   => 'drupal_get_form',
+      'page arguments'  => array('livedocx_admin_template_edit_form', 5),
+      'type' => MENU_NORMAL_ITEM,
+      'access arguments' => array('administer livedocx'),
+      'file' => 'livedocx.admin.inc',
+    ),
+    //Todo: Implement clone callback and fix menu title
+    'admin/config/services/livedocx/templates/%livedocx_wordtemplate/clone' => array(
+      'title'           => 'Administer Templates',
+      'page callback'   => 'livedocx_admin_template_clone',
+      'page arguments'  => array(5),
+      'type' => MENU_NORMAL_ITEM,
+      'access arguments' => array('administer livedocx'),
+      'file' => 'livedocx.admin.inc',
+    ),
+    //Todo: Implement delete callback and fix menu title
+    'admin/config/services/livedocx/templates/%livedocx_wordtemplate/delete' => array(
+      'title'           => 'Administer Templates',
+      'page callback'   => 'livedocx_admin_template_delete',
+      'page arguments'  => array(5),
+      'type' => MENU_NORMAL_ITEM,
+      'access arguments' => array('administer livedocx'),
+      'file' => 'livedocx.admin.inc',
+    ),
+    'admin/config/services/livedocx/settings' => array(
+      'title'           => 'Settings',
+      'page callback'   => 'drupal_get_form',
+      'page arguments'  => array('livedocx_admin_settings_form'),
+      'type' => MENU_LOCAL_TASK,
+      'access arguments' => array('administer livedocx'),
+      'file' => 'livedocx.admin.inc',
+    ),
+    'node/%node/pdf' => array(
+      'title callback' => 'node_page_title',
+      'title arguments' => array(1),
+      // The page callback also invokes drupal_set_title() in case
+      // the menu router's title is overridden by a menu link.
+      'page callback' => 'livedocx_node_view_merged_doc',
+      'page arguments' => array(1, 'livedocx_pdf'),
+      'access callback' => 'node_access',
+      'access arguments' => array('view', 1),
+    ),
+    'node/%node/word' => array(
+      'title callback' => 'node_page_title',
+      'title arguments' => array(1),
+      // The page callback also invokes drupal_set_title() in case
+      // the menu router's title is overridden by a menu link.
+      'page callback' => 'livedocx_node_view_merged_doc',
+      'page arguments' => array(1, 'livedocx_word'),
+      'access callback' => 'node_access',
+      'access arguments' => array('view', 1),
+    ),
+    //Todo: Add all other entity call backs ... maybe an entity info and then a loop?
+  );
+}
+
+function livedocx_wordtemplate_load($machine_name){
+  return db_query("SELECT * FROM {livedocx_template} WHERE machine_name = :name", array(':name' => $machine_name))->fetchObject();
+}
+
+function livedocx_template_title($machine_name){
+  return db_query("SELECT name FROM {livedocx_template} WHERE machine_name = :name", array(':name' => $machine_name))->fetchField();
+}
+
+/**
+ * Implements hook_theme().
+ *
+ * Todo:  Need to add a file key for each declaration and put all functions starting with theme_ in that file
+ */
+function livedocx_theme() {
+  return array(
+    'livedocx_manage_templates_form' => array(
+      'render element' => 'elements',
+      'file' => 'livedocx.theme.inc',
+    ),
+    'livedocx_template_edit_form' => array(
+      'render element' => 'elements',
+      'file' => 'livedocx.theme.inc',
+    )
+  );
+}
+/**
+ * Implements hook_permission
+ */
+function livedocx_permission() {
+  return array(
+    'administer livedocx' => array(
+      'title' => t('Administer LiveDocx'),
+    ),
+  );
+}
+
+function livedocx_template_get_mailmerge_variables($tid){
+  return db_query('SELECT * FROM {livedocx_mailmerge_variable} WHERE tid = :tid', array(':tid' => $tid))->fetchAllAssoc('vid');
+}
+
+function livedocx_form_field_ui_display_overview_form_alter(&$form, &$form_state, $form_id){
+  //Stub Code
+  $keys = array();
+  $view_modes = array_keys(variable_get('livedocx_view_modes', array()));
+  $bundles = variable_get('livedocx_bundles', array());
+  foreach ($bundles as $b) {
+      foreach ($view_modes as $v) {
+            $keys[] = $b . '_' . $v;
+        }
+    }
+    $key = $form['#entity_type'] . '_' . $form['#bundle'] . '_' . $form['#view_mode'];
+  if(in_array($key, $keys)){
+    $var_name = 'livedocx_' . $key;
+    $defaults = variable_get($var_name, array());
+    //Todo:  Change to PDO style query
+    $query = "SELECT name as key_index, name
+      FROM {livedocx_mailmerge_variable} var
+      JOIN {livedocx_template_mapping} map
+      ON var.tid = map.tid
+      WHERE var.field_map = 'field'
+      AND map.entity_type = :entity_type
+      AND map.bundle = :bundle";
+
+    $merge_vars = db_query($query, array(':entity_type' => $form['#entity_type'], ':bundle' => $form['#bundle']))->fetchAllKeyed();
+    $merge_vars = array_merge(array('none'  => t('None')), $merge_vars);
+    drupal_add_js(array('liveDocX' => array('selectValues' => $merge_vars)), 'setting');
+    $form['fields']['#header'][] = 'merge variable';
+    $fields = element_children($form['fields']);
+    $avail_options = $merge_vars;
+    foreach($merge_vars as $key => $text){
+      foreach($defaults as $field_name => $option_key){
+          if ($key == $option_key && $key !== 'none') {
+                    unset($avail_options[$key]);
+                }
+            }
+    }
+    foreach($fields as $field){
+      $form['fields'][$field]['merge variable'] = array(
+        '#type'           => 'select',
+        '#title'          => t('Merge variable for @field', array('@field' => $field)),
+        '#title_display'  => 'invisible',
+        //TODO: need to work on this!  What if it's set to none?
+        '#options'        => (isset($defaults[$field]) && array_key_exists($field, $defaults))? array_merge($avail_options, array($defaults[$field] => $merge_vars[$defaults[$field]])) : $avail_options,
+        '#default_value'  => (isset($defaults[$field]) && array_key_exists($field, $defaults))? $defaults[$field] : 'none',
+        '#attributes'     => array(
+          'class' => array(
+            0 => 'livedocx-mergefield-' . str_replace('_', '-', $key) . '-' . $field,
+            1 => 'livedocx-mergefield-select',
+          ),
+        ),
+      );
+    }
+    //Todo: add validation hook
+    $form['#attached']['js'][] = drupal_get_path('module', 'livedocx') . '/livedocx.js';
+    $form['#after_build'] = array('livedocx_field_ui_display_overview_form_remove');
+    $form['#submit'][] = 'livedocx_mailmerge_mapping_submit';
+  }
+}
+
+function livedocx_field_ui_display_overview_form_remove($form, &$form_state){
+  unset($form['additional_settings']);
+  if (module_exists('field_group')) {
+        unset($form['fields']['_add_new_group']);
+    }
+    return $form;
+}
+
+function livedocx_mailmerge_mapping_submit($form, &$form_state){
+  $mapping = array();
+  foreach($form_state['values']['fields'] as $key => $field){
+    if($key !== '_add_new_group'){
+      $mapping[$key] = $form_state['values']['fields'][$key]['merge variable'];
+    }
+  }
+  $var_name = 'livedocx_' . $form['#entity_type'] . '_' . $form['#bundle'] . '_' . $form['#view_mode'];
+  variable_set($var_name, $mapping);
+}
+
+function livedocx_entity_info_alter(&$entity_info) {
+  $bundles = variable_get('livedocx_bundles', array());
+  $enabled_entities = array_keys($bundles);
+  foreach (array_keys($entity_info) as $entity_type) {
+    if (!empty($entity_info[$entity_type]['view modes']) && in_array($entity_type, $enabled_entities)) {
+      $view_modes = variable_get('livedocx_view_modes', array());
+      if(!empty($view_modes)){
+        $entity_info[$entity_type]['view modes'] += $view_modes;
+      }
+    }
+  }
+}
+
+function livedocx_node_view_merged_doc($node, $view_mode){
+  return node_view($node, $view_mode);
+}
+
+function livedocx_entity_view($entity, $type, $view_mode){
+    $view_modes = array_keys(variable_get('livedocx_view_modes', array()));
+  $bundles = variable_get('livedocx_bundles', array());
+  foreach ($bundles as $b) {
+      foreach ($view_modes as $v) {
+            $keys[] = $b . '_' . $v;
+        }
+    }
+    //end stub
+  if (isset($type) && isset($entity->type) && isset($view_mode)){
+    $key = $type . '_' . $entity->type . '_' . $view_mode;
+  }
+  if(isset($key) && in_array($key, $keys)){
+    //get template file meta data
+    $query = "SELECT t.tid, t.fid
+      FROM livedocx_template_mapping map
+      JOIN livedocx_template t
+      ON map.tid = t.tid
+      WHERE entity_type = :entity_type
+      AND bundle = :bundle";
+
+    $template = db_query($query, array(':entity_type' => $type, ':bundle' => $entity->type))->fetchAssoc();
+    list($tid, $fid) = array_values($template);
+    $mapping = variable_get('livedocx_' . $key, array());
+    $merge_variables = array();
+    foreach($mapping as $key => $mergefield){
+      if($mergefield !== 'none' && !is_null($mergefield)){
+          //Todo: Clean up this mess!  Need a hook or something to handle each field type and return plain text!
+// Broken!!!
+//        if($entity->content[$key]['#field_type'] == 'entityreference'){
+//            $values = array();
+//            $children = element_children($entity->content[$key]);
+//            foreach($children as $child){
+//              foreach($entity->content[$key][$child] as $type => $container){
+//                foreach($container as $entity_id => $element){
+//                  $render_elements = element_children($element);
+//                  foreach($render_elements as $e){
+//                    if($e !== 'links'){
+//                      $values[] = drupal_render($element[$e]);
+//                    }
+//                  }
+//                }
+//              }
+//            }
+//            $value = implode(" ", $values);
+//            $value = filter_xss($value, array('li'));
+//            $value = preg_replace('/<li[^>]+>|<\/li>/i', ' ', $value);
+//            $value = preg_replace("/&#?[a-z0-9:]+;/i","", $value);
+//            $merge_variables[$mergefield] = $value;
+//        }else{
+          $rendered = drupal_render($entity->content[$key]);
+          $value = filter_xss($rendered, array('li'));
+          $value = preg_replace('/<li[^>]+>|<\/li>/i', ' ', $value);
+          $value = preg_replace("/&#?[a-z0-9:]+;/i","", $value);
+          $merge_variables[$mergefield] = $value;
+//        }
+      }
+    }
+    //get title
+    $query = "SELECT name FROM livedocx_mailmerge_variable WHERE tid = :tid and field_map = 'title'";
+    $title_var = db_query($query, array(':tid' => $tid))->fetchField();
+    $merge_variables = array_merge(array($title_var => $entity->title), $merge_variables);
+    if(!empty($merge_variables) && $fid && $tid){
+      $doc_types = array(
+        'livedocx_word' => 'docx',
+        'livedocx_pdf'  => 'pdf',
+      );
+      $public_path = './' . variable_get('file_public_path', '');
+      $file = file_load($fid);
+      $wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
+      $template_path = $wrapper->realpath();
+      ini_set ('soap.wsdl_cache_enabled', 0);
+      // Define credentials for LD
+      $credentials = array(
+        'username' => variable_get('livedocx_username', ''),
+        'password' => variable_get('livedocx_password', ''),
+      );
+
+      // SOAP WSDL endpoint
+      $endpoint = 'https://api.livedocx.com/2.1/mailmerge.asmx?wsdl';
+
+
+      // Create a new instance of the SoapClient object
+      $soap = new SoapClient($endpoint);
+      $soap->LogIn(
+        array(
+          'username' => $credentials['username'],
+          'password' => $credentials['password']
+        )
+      );
+
+      // Upload template
+      $data = file_get_contents($template_path);
+      if(empty($data)) {
+        drupal_set_message('Failed to read the template', 'error');
+        watchdog('famed', 'Failed to read the template', WATCHDOG_ERROR);
+        return;
+      }
+
+      $soap->SetLocalTemplate(array(
+        'template' => base64_encode($data),
+        'format'   => 'docx'
+      ));
+
+      $soap->SetFieldValues(array(
+        'fieldValues' => array(
+          array_keys($merge_variables),
+          array_values($merge_variables),
+        )
+      ));
+      // Build the document
+      $soap->CreateDocument();
+
+      // Get document as DOC
+      $result = $soap->RetrieveDocument(array(
+        'format' => $doc_types[$view_mode],
+      ));
+
+      // Fetch the document
+      $download_file_name = uniqid($entity->title . "_");
+      $data = $result->RetrieveDocumentResult;
+      $filename = $public_path . '/' . $download_file_name;
+      if(file_exists($filename)) {
+        unlink($filename);
+      }
+
+      // Write the document to the filesystem
+      file_put_contents($filename, base64_decode($data));
+
+      // Force the browser to download the document
+      if(file_exists($filename)) {
+        //Todo: Need to change to drupal_add_http_header
+        header("Content-type: octet/stream");
+        header('Content-disposition: attachment; filename="' . $download_file_name . '.' . $doc_types[$view_mode] . '";');
+        header("Content-Length: ".filesize($filename));
+        readfile($filename);
+        //Remove file after it has been sent
+        unlink($filename);
+        exit;
+      }
+      else {
+        drupal_set_message('Failed to download the file', 'error');
+      }
+    }
+  }
+}
+
+

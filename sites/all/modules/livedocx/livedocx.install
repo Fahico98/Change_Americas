@@ -1,0 +1,106 @@
+<?php
+function livedocx_install(){
+  $view_modes = array(
+    'livedocx_word' => array(
+      'label' => t('LiveDocx Word'),
+      'custom settings' => FALSE,
+    ),
+    'livedocx_pdf' => array(
+      'label' => t('LiveDocx PDF'),
+      'custom settings' => FALSE,
+    ),
+  );
+  variable_set('livedocx_view_modes', $view_modes);
+}
+
+/**
+ * Implements hook_schema().
+ */
+function livedocx_schema() {
+  $schema = array();
+
+  $schema['livedocx_template'] = array(
+    'description' => 'Table for storing mail merge docx template metadata',
+    'fields' => array(
+      'tid' => array(
+        'description' => 'Template Unique Id',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'fid' => array(
+        'description' => 'A foreign key to the file_managed table',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'description' => 'The name of the template',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'machine_name' => array(
+        'description' => 'The machine name of the template',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+    ),
+    'primary key' => array('tid'),
+    'indexes' => array('tid' => array('tid')),    
+  );
+  $schema['livedocx_template_mapping'] = array(
+    'description' => 'Table for storing mail merge docx template metadata',
+    'fields' => array(
+      'tid' => array(
+        'description' => 'Template Unique Id',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'entity_type' => array(
+        'description' => 'An entity type machine name',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'bundle' => array(
+        'description' => 'A bundle machine name',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+    ),
+    'primary key' => array('tid'),
+    'indexes' => array('tid' => array('tid')),    
+  );
+  $schema['livedocx_mailmerge_variable'] = array(
+    'description' => 'Table for storing mail merge variables associated with a livedocx template',
+    'fields' => array(
+      'vid' => array(
+        'description' => 'Mailmerge variable Unique Id',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'tid' => array(
+        'description' => 'A foreign key to the livedocx_template table',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'description' => 'The mail Merge merge field variable name as it appears in the ms docx file',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'field_map' => array(
+        'description' => 'Whether the variable maps to the title or a field in a bundle',
+        'type' => 'char',
+        'length' => 10,
+      )
+    ),
+    'primary key' => array('vid'),
+    'indexes' => array('vid' => array('vid')),
+  );
+
+  return $schema;
+}
